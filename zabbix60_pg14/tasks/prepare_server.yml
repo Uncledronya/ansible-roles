@@ -1,0 +1,36 @@
+---
+
+- name: Fix locale issuies
+  ansible.builtin.include_tasks:
+    file: tasks/fix_locales.yml
+
+- name: Set timezone
+  ansible.builtin.include_tasks:
+    file: tasks/set_time.yml
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ server_hostname }}"
+
+- name: Disable IPv6
+  ansible.posix.sysctl:
+    name: net.ipv6.conf.all.disable_ipv6
+    value: '1'
+    sysctl_set: true
+    reload: true
+
+- name: Disable IPv6
+  ansible.posix.sysctl:
+    name: net.ipv6.conf.default.disable_ipv6
+    value: '1'
+    sysctl_set: true
+    reload: true
+
+- name: Update repositories cache
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Install gnupg2 package
+  ansible.builtin.apt:
+    name: gnupg2
+    state: present

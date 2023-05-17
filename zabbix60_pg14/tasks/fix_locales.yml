@@ -1,0 +1,26 @@
+---
+
+- name: Install packets
+  ansible.builtin.apt:
+    pkg:
+      - locales
+
+- name: Enable 'en_US.UTF-8 UTF-8'  in /etc/locale.gen
+  ansible.builtin.replace:
+    path: /etc/locale.gen
+    regexp: "# en_US.UTF-8 UTF-8"
+    replace: "en_US.UTF-8 UTF-8"
+
+- name: Enable 'ru_RU.UTF-8 UTF-8'  in /etc/locale.gen
+  ansible.builtin.replace:
+    path: /etc/locale.gen
+    regexp: "# ru_RU.UTF-8 UTF-8"
+    replace: "ru_RU.UTF-8 UTF-8"
+
+- name: Update locale settings
+  ansible.builtin.command: "{{ item }}"
+  with_items:
+    - update-locale LC_ALL=en_US.UTF-8
+    - dpkg-reconfigure --frontend=noninteractive locales
+  register: my_output
+  changed_when: my_output.rc != 0

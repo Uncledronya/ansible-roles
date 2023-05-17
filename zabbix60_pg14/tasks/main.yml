@@ -1,0 +1,173 @@
+---
+# tasks file for zabbix60_pg14
+
+- name: Include file vars main.yml
+  ansible.builtin.include_vars:
+    dir: vars
+    files_matching: main.yaml
+
+- name: Prepare server for Zabbix install
+  ansible.builtin.include_tasks:
+    file: tasks/prepare_server.yml
+
+# Postgres 14 Install
+
+- name: Create the file repository configuration
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/pgdg.list
+    line: "deb http://apt.postgresql.org/pub/repos/apt buster-pgdg main"
+    create: yes
+  when: repository == 'external'
+
+- name: Import the repository signing key
+  ansible.builtin.apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: present
+  when: repository == 'external'
+
+- name: Update repositories cache
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Install PostgreSQL version 14
+  ansible.builtin.apt:
+    pkg:
+      - postgresql-14
+      - postgresql-client-14
+
+# Postgres 14 configuration
+
+- name: Change port postgresql
+  ansible.builtin.replace:
+    path: /etc/postgresql/14/main/postgresql.conf
+    regexp: "^# port =.+"
+    replace: "port = 5432"
+  tags: never
+
+- name: Backup and truncate pg_hba.conf
+  ansible.builtin.copy:
+    content: ''
+    dest: /etc/postgresql/14/main/pg_hba.conf
+    owner: postgres
+    group: postgres
+    mode: 0644
+    backup: yes
+
+- name: Add lines in pg_hba.conf
+  ansible.builtin.lineinfile:
+    line: "{{ item }}"
+    path: /etc/postgresql/14/main/pg_hba.conf
+  loop:
+    - "local   all             postgres                                peer"
+    - "local   all             all                                     peer"
+    - "host    all             all             127.0.0.1/32            md5"
+    - "local   replication     all                                     peer"
+    - "host    replication     all             127.0.0.1/32            md5"
+
+- name: Restart postgresql.service
+  ansible.builtin.service:
+    name: postgresql.service
+    state: restarted
+
+# Zabbix Install
+
+- name: Install a .deb package from the internet
+  ansible.builtin.apt:
+    deb: https://repo.zabbix.com/zabbix/6.0/debian/pool/main/z/zabbix-release/zabbix-release_6.0-4+debian10_all.deb
+  when: repository == 'external'
+
+- name: Update repositories cache
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Install Zabbix packages
+  ansible.builtin.apt:
+    pkg:
+      - zabbix-server-pgsql
+      - zabbix-frontend-php
+      - php7.3-pgsql
+      - zabbix-sql-scripts
+      - zabbix-agent
+
+- name: Remove apache2 package
+  ansible.builtin.apt:
+    name: apache2
+    state: absent
+
+- name: Install Zabbix package nginx
+  ansible.builtin.apt:
+    pkg:
+      - zabbix-nginx-conf
+
+# Zabbix configuration
+
+# Create user and DB for Zabbix
+
+- name: Add package python3-psycopg2 for Ansible work with PostgreSQL
+  ansible.builtin.apt:
+    pkg:
+      - python3-psycopg2
+    
+- name: Create user for Zabbix
+  community.postgresql.postgresql_user:
+    state: present
+    name: "{{ zabbix_db_user }}"
+    password: "{{ zabbix_db_password}}"
+  become: true
+  become_user: postgres
+
+- name: Create DB for Zabbix
+  community.postgresql.postgresql_db:
+    name: zabbix
+    owner: zabbix
+    state: present
+  become: true
+  become_user: postgres
+
+- name: Upload Zabbix to DB
+  ansible.builtin.shell: zcat /usr/share/zabbix-sql-scripts/postgresql/server.sql.gz | psql -p 5432 -U zabbix -d zabbix
+  become: true
+  become_user: zabbix
+
+- name: Edit zabbix config
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/zabbix_server.conf 
+    insertafter: '^#.+DBPassword.+'
+    line: "DBPassword={{ zabbix_db_password }}"
+
+# Nginx configuration
+
+- name: Remove defaults nginx configs
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/
+    state: absent
+
+- name: Change Nginx port
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/nginx.conf
+    insertafter: '^#.+listen.+8080;'
+    line: 'listen 80;'
+
+- name: Change server_name
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/nginx.conf
+    insertafter: '^#.+server_name.+;'
+    line: 'server_name _;'
+
+# PHP
+
+- name: Add timezone in php-fpm
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/php-fpm.conf
+    insertafter: EOF
+    line: 'php_value[date.timezone] = Europe/Moscow'
+
+- name: Restart all zabbix services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - "zabbix-server"
+    - "zabbix-agent"
+    - "nginx"
+    - "php7.3-fpm"

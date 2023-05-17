@@ -1,0 +1,10 @@
+---
+# vars file for zabbix60_pg14
+
+server_hostname: "zabbix-server"
+timezone: "Europe/Moscow"
+zabbix_db_user: "zabbix"
+zabbix_db_password: "zabbix"
+# repository: "external" # internal
+repository: "internal"
+

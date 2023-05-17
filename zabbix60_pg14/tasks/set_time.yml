@@ -1,0 +1,28 @@
+---
+
+# ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localtime
+
+# - name: Set timezone
+#   ansible.builtin.copy:
+#     content: "{{ timezone }}"
+#     dest: /etc/timezone
+#     owner: root
+#     group: root
+#     mode: 0644
+#     backup: yes
+#   register: timezone
+
+- name: Create link for timezone
+  ansible.builtin.file:
+    src: '/usr/share/zoneinfo/Europe/Moscow'
+    dest: '/etc/localtime'
+    state: link
+
+- name: Reconfigure Timezone Data
+  ansible.builtin.command: dpkg-reconfigure --frontend noninteractive tzdata
+  # when: timezone.changed
+
+- name: Install ntp
+  ansible.builtin.apt:
+    name: ntp
+    state: present

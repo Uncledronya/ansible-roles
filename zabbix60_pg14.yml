@@ -1,0 +1,5 @@
+---
+- name: Install Zabbix 6.0 LTS and PostgreSQL 14
+  hosts: all
+  roles:
+    - zabbix60_pg14
