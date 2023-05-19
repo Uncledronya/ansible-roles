@@ -1,5 +1,9 @@
 ---
 
+- name: Update repositories cache
+  ansible.builtin.apt:
+    update_cache: yes
+
 - name: Fix locale issuies
   ansible.builtin.include_tasks:
     file: tasks/fix_locales.yml
@@ -25,10 +29,6 @@
     value: '1'
     sysctl_set: true
     reload: true
-
-- name: Update repositories cache
-  ansible.builtin.apt:
-    update_cache: yes
 
 - name: Install gnupg2 package
   ansible.builtin.apt:
